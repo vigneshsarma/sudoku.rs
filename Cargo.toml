@@ -1,0 +1,6 @@
+[package]
+name = "sudoku"
+version = "0.1.0"
+authors = ["Vignesh Sarma K (വിഘ്നേഷ് ശ൪മ കെ) <vignesh.sarma@gmail.com>"]
+
+[dependencies]
