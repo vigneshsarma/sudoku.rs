@@ -183,6 +183,9 @@ impl Sudoku {
     }
 
     fn find_loc_with_minimal_possiblities(&self) -> (usize, usize, Vec<u8>) {
+        let mut r = 0;
+        let mut c = 0;
+        let mut min = vec!();
         for i in 0..9 {
             for j in 0..9 {
                 if self.data[i][j] != 0 {
@@ -196,12 +199,19 @@ impl Sudoku {
                     panic!(format!("you have more options before calling me."))
                 } else {
                     if possible.len() < 3 {
-                       return (i, j, possible)
+                        return (i, j, possible)
+                    } else {
+                        if possible.len() > 0 && (
+                            min.len() == 0 || min.len() > possible.len()){
+                            r = i;
+                            c = j;
+                            min = possible;
+                        }
                     }
                 }
             }
         }
-        panic!("If it gets here all is lost!")
+        (r, c, min)
     }
 
     fn loop_over(&mut self, debug: bool) -> Result<usize, String> {
@@ -355,25 +365,28 @@ fn test_row_column_to_box() {
 }
 
 #[test]
-fn test_solve_easy() {
-    let file_name = "test_data/easy.txt";
-
-    let mut file = File::open(file_name).unwrap();
-    let mut s = String::new();
-    file.read_to_string(&mut s).unwrap();
-    let game_strs: Vec<&str> = s.split("\n\n").collect();
-    // assert!(false);
-    for (c, &game) in game_strs.iter().enumerate() {
-        let mut s = Sudoku::from_str(game.to_string().replace("_", "0"));
-        println!("=============== {} ===============", c);
-        match s.solve() {
-            Err(reason) => {
-                println!("{}", reason);
-                assert!(false);
-            },
-            Ok(Some(n)) => assert!(n.done()),
-            Ok(None) => assert!(s.done())
-        };
+fn test_solve_sudokus() {
+    let file_names = ["test_data/easy.txt",
+                      "test_data/medium.txt",
+                      "test_data/hard.txt"];
+    for names in file_names.iter() {
+        let mut file = File::open(names).unwrap();
+        let mut s = String::new();
+        file.read_to_string(&mut s).unwrap();
+        let game_strs: Vec<&str> = s.split("\n\n").collect();
+        // assert!(false);
+        for (c, &game) in game_strs.iter().enumerate() {
+            let mut s = Sudoku::from_str(game.to_string().replace("_", "0"));
+            println!("=============== {} ===============", c);
+            match s.solve() {
+                Err(reason) => {
+                    println!("{}", reason);
+                    assert!(false);
+                },
+                Ok(Some(n)) => assert!(n.done()),
+                Ok(None) => assert!(s.done())
+            };
+        }
     }
     // Sudoku::from_str(s)
     // assert!(false);
