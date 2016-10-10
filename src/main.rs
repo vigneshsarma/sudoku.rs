@@ -33,9 +33,9 @@ impl Axis {
         if self.present[(val-1) as usize] == false {
             self.present[(val-1) as usize] = true;
             self.len += 1;
-        } else {
-            println!("{:?} {}", self, val)
-        }
+        }//  else {
+        //     println!("{:?} {}", self, val)
+        // }
     }
 
     fn mark_possibilities(&self, possibilities: &mut [bool; 9]) {
@@ -74,6 +74,21 @@ impl Sudoku {
                grid: [[[true; 9]; 9]; 9]}
     }
 
+    fn new_with(&self, r: usize, c: usize, val: u8) -> Sudoku {
+        let mut new = Sudoku::new();
+        new.set(r, c, val);
+        for i in 0..9 {
+            for j in 0..9 {
+                if self.data[i][j] == 0 {
+                    continue
+                }
+                new.set(i, j, self.data[i][j]);
+            }
+        }
+        new.update_grid();
+        new
+    }
+
     fn done(&self) -> bool {
         self.len == 81
     }
@@ -92,7 +107,10 @@ impl Sudoku {
     }
 
     fn set(&mut self, r: usize, c: usize, val: u8) {
-        assert_eq!(self.data[r][c], 0);
+        if self.data[r][c] != 0 {
+            println!("{:?} -> {} by {}", (r, c), self.data[r][c], val);
+            assert!(false);
+        }
         self.len += 1;
         self.data[r][c] = val;
         self.rows[r].add(val);
@@ -127,89 +145,151 @@ impl Sudoku {
         }
     }
 
-    fn check_row_possible<F>(&mut self, debug: &str, location_tr: F) -> usize
+    fn check_row_possible<F>(&mut self, debug: &str, location_tr: F)
+                             -> Result<usize, String>
         where F: Fn((usize, usize)) -> (usize, usize) {
         let mut updates = 0;
         for i in 0..9 { // iter over rows
-            let mut recorder:[(usize, Vec<usize>); 9] =
-                [(0, vec![]), (0, vec![]), (0, vec![]),
-                 (0, vec![]), (0, vec![]), (0, vec![]),
-                 (0, vec![]), (0, vec![]), (0, vec![])];
+            let mut recorder:[Vec<usize>; 9] =
+                [vec![], vec![], vec![],
+                 vec![], vec![], vec![],
+                 vec![], vec![], vec![]];
 
             for j in 0..9 { // iter over columns
+                let (r, c) = location_tr((i, j));
                 for k in 0..9 { // iter over possible values
-                    let (r, c) = location_tr((i, j));
                     if self.grid[r][c][k] {
-                        let (ref mut count, ref mut locations) = recorder[k];
+                        let ref mut locations = recorder[k];
                         locations.push(j);
-                        *count += 1;
                     }
                 }
             }
             for k in 0..9 {
-                let (ref count, ref locations) = recorder[k];
-                if *count == 1 {
+                let ref locations = recorder[k];
+                if locations.len() == 1 {
                     let (r, c) = location_tr((i, locations[0]));
+                    if self.data[r][c] != 0 {
+                        return Err(format!(
+                            "Got to bad state with {} {:?} -> {} already has {}",
+                            debug, (r, c), k+1, self.data[r][c]))
+                    }
                     println!("{} {:?} -> {}", debug, (r, c), k+1);
                     self.set(r, c, (k+1) as u8);
                     updates += 1;
                 }
             }
         }
-        updates
+        Ok(updates)
     }
 
-    fn loop_over(&mut self, debug: bool) -> usize {
+    fn find_loc_with_minimal_possiblities(&self) -> (usize, usize, Vec<u8>) {
+        for i in 0..9 {
+            for j in 0..9 {
+                if self.data[i][j] != 0 {
+                    continue;
+                }
+                let presense = self.grid[i][j];
+                let possible = presense_array_to_vec(&presense);
+                if possible.is_empty() {
+                    panic!(format!("No possible solution for {:?}", (i, j)));
+                } else if possible.len() == 1 {
+                    panic!(format!("you have more options before calling me."))
+                } else {
+                    if possible.len() < 3 {
+                       return (i, j, possible)
+                    }
+                }
+            }
+        }
+        panic!("If it gets here all is lost!")
+    }
+
+    fn loop_over(&mut self, debug: bool) -> Result<usize, String> {
         let mut updates = 0;
         for i in 0..9 {
             for j in 0..9 {
+                if self.data[i][j] != 0 {
+                    continue;
+                }
                 let presense = self.grid[i][j];
                 let possible = presense_array_to_vec(&presense);
-                if possible.len() == 1 {
+                if possible.is_empty() {
+                    return Err(format!("No possible solution for {:?}", (i, j)));
+                } else if  possible.len() == 1 {
                     println!("{:?} -> {:?}", (i, j), possible);
                     self.set(i, j, possible[0]);
                     updates += 1;
-                } else if !possible.is_empty() && debug {
+                } else if debug {
                     println!("{:?} -> {:?}", (i, j), possible);
                 }
             }
         }
         if updates == 0 {
-            // let id = |(r, c)| (r, c);
-            self.update_grid();
-            updates = self.check_row_possible("Row", |(r, c)| (r, c));
-        }
-        if updates == 0 {
-            // let id = |(r, c)| (r, c);
-            self.update_grid();
-            updates = self.check_row_possible("Column", |(r, c)| (c, r));
-        }
-
-        updates
-    }
-
-    fn solve(&mut self) {
-        while !self.done() {
-            if self.loop_over(false) == 0 {
-                println!("---------- Failed: Cant find any more ----------. {}", self.len);
-                self.update_grid();
-                self.loop_over(true);
-                display_board(&self.data);
-                println!("---------- Failed: Cant find any more ----------. {}", self.len);
-                break;
-            } else {
-                self.update_grid();
-                println!("--------------------");
+            match self.check_row_possible("Row", |(r, c)| (r, c)) {
+                Ok(updates_) => updates = updates_,
+                Err(err) => return Err(err)
             }
         }
-        if self.done() {
+        if updates == 0 {
+            match self.check_row_possible("Column", |(r, c)| (c, r)){
+                Ok(updates_) => updates = updates_,
+                Err(err) => return Err(err)
+            }
+        }
+        if updates == 0 {
+            match self.check_row_possible("Box", |(r, c)| {
+                let r_ = ((r/3)*3)+c/3;
+                let c_ = ((r%3)*3)+c%3;
+                (r_, c_)}) {
+                Ok(updates_) => updates = updates_,
+                Err(err) => return Err(err)
+            }
+        }
 
+        Ok(updates)
+    }
+
+    fn solve(&mut self) -> Result<Option<Sudoku>, String> {
+        while !self.done() {
+             match self.loop_over(false) {
+                 Ok(updates) => {
+                     if updates == 0 {
+                         println!("---------- Failed: Cant find any more ---------. {}", self.len);
+                         // self.update_grid();
+                         // self.loop_over(true).ok();
+                         display_board(&self.data);
+                         println!("---------- Failed: Cant find any more ---------. {}", self.len);
+                         break;
+                     } else {
+                         self.update_grid();
+                         println!("--------------------");
+                     }
+                 },
+                 Err(reason) => return Err(reason)
+             }
+        }
+        if self.done() {
             println!("------- Solved -------------");
             display_board(&self.data);
             println!("------- Solved -------------");
+            Ok(None)
+        } else {
+            let (r, c, options) = self.find_loc_with_minimal_possiblities();
+            println!("Now guessing with {:?} -> {:?}", (r, c), options);
+            for opt in options.iter() {
+                let mut n = self.new_with(r, c, *opt);
+                match n.solve() {
+                    Err(err) => {
+                        println!("Backtracking due to {} for {}", err, opt);
+                        continue
+                    },
+                    Ok(Some(u)) => return Ok(Some(u)),
+                    Ok(None) => return Ok(Some(n))
+                }
+            }
+            Err(format!("Cant solve {:?} -> {:?}", (r, c), options))
         }
     }
-
 }
 
 fn presense_array_to_vec(data: &[bool; 9]) -> Vec<u8> {
@@ -244,7 +324,7 @@ fn main() {
         Some(file) => {
             let mut problem = read_problem(file.as_str());
             println!("Solve {}", file);
-            problem.solve();
+            problem.solve().unwrap();
             display_board(&problem.data);
 
             // println!("{:?}", problem.test_candidates())
@@ -286,8 +366,14 @@ fn test_solve_easy() {
     for (c, &game) in game_strs.iter().enumerate() {
         let mut s = Sudoku::from_str(game.to_string().replace("_", "0"));
         println!("=============== {} ===============", c);
-        s.solve();
-        assert!(s.done());
+        match s.solve() {
+            Err(reason) => {
+                println!("{}", reason);
+                assert!(false);
+            },
+            Ok(Some(n)) => assert!(n.done()),
+            Ok(None) => assert!(s.done())
+        };
     }
     // Sudoku::from_str(s)
     // assert!(false);
