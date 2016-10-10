@@ -391,3 +391,26 @@ fn test_solve_sudokus() {
     // Sudoku::from_str(s)
     // assert!(false);
 }
+
+#[test]
+fn test_solve_all_of_17() {
+    let file_name = "test_data/sudoku17.16000.txt";
+    let mut file = File::open(file_name).unwrap();
+        let mut s = String::new();
+        file.read_to_string(&mut s).unwrap();
+        let game_strs: Vec<&str> = s.split("\n").collect();
+        // assert!(false);
+        for (c, &game) in game_strs.iter().enumerate() {
+            let mut s = Sudoku::from_str(game.to_string().replace("_", "0")
+                                         .replace(".", "0"));
+            println!("=============== {} ===============", c);
+            match s.solve() {
+                Err(reason) => {
+                    println!("{}", reason);
+                    assert!(false);
+                },
+                Ok(Some(n)) => assert!(n.done()),
+                Ok(None) => assert!(s.done())
+            };
+        }
+}
